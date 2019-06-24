@@ -96,6 +96,20 @@ namespace ExcelDataReader.Netstandard20.Tests
         }
 
         [TestMethod]
+        public void GitIssue_389_FilterSheetByVisibility()
+        {
+            using (IExcelDataReader excelReader = ExcelReaderFactory.CreateBinaryReader(Configuration.GetTestWorkbook("Test_Excel_Dataset")))
+            {
+                var result = excelReader.AsDataSet(new ExcelDataSetConfiguration()
+                {
+                    FilterSheet = (r, index) => r.VisibleState == "visible"
+                });
+
+                Assert.AreEqual(1, result.Tables.Count);
+            }
+        }
+
+        [TestMethod]
         public void GitIssue_45()
         {
             using (var reader = ExcelReaderFactory.CreateBinaryReader(Configuration.GetTestWorkbook("Test_git_issue_45")))
@@ -908,7 +922,7 @@ namespace ExcelDataReader.Netstandard20.Tests
         [TestMethod]
         public void Issue_12556_corrupt()
         {
-            Assert.Throws<InvalidOperationException>(() =>
+            Assert.Throws<CompoundDocumentException>(() =>
             {
                 // Excel.Log.Log.InitializeWith<Log4NetLog>();
                 using (var forwardStream = Configuration.GetTestWorkbook("Test_Issue_12556_corrupt"))
@@ -1144,7 +1158,7 @@ namespace ExcelDataReader.Netstandard20.Tests
         public void GitIssue5()
         {
             using (var stream = Configuration.GetTestWorkbook("Test_git_issue_5"))
-                Assert.Throws<InvalidOperationException>(() => ExcelReaderFactory.CreateBinaryReader(stream));
+                Assert.Throws<CompoundDocumentException>(() => ExcelReaderFactory.CreateBinaryReader(stream));
         }
 
         [TestCase]
@@ -1568,6 +1582,46 @@ namespace ExcelDataReader.Netstandard20.Tests
         }
 
         [TestMethod]
+        public void BinaryCompoundLeaveOpen()
+        {
+            // Verify compound stream is not disposed by the reader
+            {
+                var stream = Configuration.GetTestWorkbook("Test10x10");
+                using (IExcelDataReader excelReader = ExcelReaderFactory.CreateBinaryReader(stream, new ExcelReaderConfiguration()
+                {
+                    LeaveOpen = true
+                }))
+                {
+                    var result = excelReader.AsDataSet();
+                }
+
+                stream.Seek(0, SeekOrigin.Begin);
+                stream.ReadByte();
+                stream.Dispose();
+            }
+        }
+
+        [TestMethod]
+        public void BinaryRawLeaveOpen()
+        {
+            // Verify raw stream is not disposed by the reader
+            {
+                var stream = Configuration.GetTestWorkbook("biff3");
+                using (IExcelDataReader excelReader = ExcelReaderFactory.CreateBinaryReader(stream, new ExcelReaderConfiguration()
+                {
+                    LeaveOpen = true
+                }))
+                {
+                    var result = excelReader.AsDataSet();
+                }
+
+                stream.Seek(0, SeekOrigin.Begin);
+                stream.ReadByte();
+                stream.Dispose();
+            }
+        }
+
+        [TestMethod]
         public void GitIssue_286_SSTStringHeader()
         {
             // Parse xls with SST containing string split exactly between its header and string data across the BIFF Continue records
@@ -1844,6 +1898,72 @@ namespace ExcelDataReader.Netstandard20.Tests
                 reader.Read();
                 Assert.AreEqual("Same with XF 70 via IXFE", reader[0]);
                 Assert.AreEqual("\\A@\\B", reader.GetNumberFormatString(0));
+            }
+        }
+
+        [TestMethod]
+        public void ColumnWidthsTest()
+        {
+            using (var reader = ExcelReaderFactory.CreateBinaryReader(Configuration.GetTestWorkbook("ColumnWidthsTest.xls")))
+            {
+                reader.Read();
+
+                Assert.AreEqual(8.43, reader.GetColumnWidth(0));
+                Assert.AreEqual(0, reader.GetColumnWidth(1));
+                Assert.AreEqual(15.140625, reader.GetColumnWidth(2));
+                Assert.AreEqual(28.7109375, reader.GetColumnWidth(3));
+
+                var expectedException = typeof(ArgumentException);
+                var exception = Assert.Throws(expectedException, () =>
+                {
+                    reader.GetColumnWidth(4);
+                });
+
+                Assert.AreEqual($"Column at index 4 does not exist.{Environment.NewLine}Parameter name: i",
+                    exception.Message);
+            }
+        }
+
+        [TestMethod]
+        public void GitIssue_375_Ixfe_RowMap()
+        {
+            // This reads a specially crafted XLS which loads in Excel:
+            // - 100 rows with IXFE records
+            // Verify the internal map of cell offsets used for buffering includes the preceding IXFE records
+            using (var reader = ExcelReaderFactory.CreateBinaryReader(Configuration.GetTestWorkbook("Test_git_issue_375_ixfe_rowmap.xls")))
+            {
+                for (var i = 0; i < 100; i++)
+                {
+                    reader.Read();
+                    Assert.AreEqual(1234.0 + i + (i / 10.0), reader[0]);
+                    Assert.AreEqual("0.000", reader.GetNumberFormatString(0));
+                }
+            }
+        }
+
+        [TestMethod]
+        public void GitIssue_382_OOM()
+        {
+            var exception = Assert.Throws(typeof(CompoundDocumentException), () =>
+            {
+                using (var reader = ExcelReaderFactory.CreateBinaryReader(Configuration.GetTestWorkbook("Test_git_issue_382_oom.xls")))
+                {
+                    reader.AsDataSet();
+                }
+            });
+        }
+
+        [TestMethod]
+        public void GitIssue_392_OOB()
+        {
+            using (var reader = ExcelReaderFactory.CreateBinaryReader(Configuration.GetTestWorkbook("Test_git_issue_392_oob.xls")))
+            {
+                var result = reader.AsDataSet().Tables[0];
+
+                Assert.AreEqual(10, result.Rows.Count);
+                Assert.AreEqual(10, result.Columns.Count);
+                Assert.AreEqual("10x10", result.Rows[1][0]);
+                Assert.AreEqual("10x27", result.Rows[9][9]);
             }
         }
     }

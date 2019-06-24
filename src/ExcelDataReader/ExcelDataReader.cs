@@ -128,6 +128,39 @@ namespace ExcelDataReader
             return RowCells[i].NumberFormatIndex;
         }
 
+        public double GetColumnWidth(int i)
+        {
+            if (i >= FieldCount)
+            {
+                throw new ArgumentException($"Column at index {i} does not exist.", nameof(i));
+            }
+
+            var columnWidths = _worksheetIterator?.Current?.ColumnWidths ?? null;
+            double? retWidth = null;
+            if (columnWidths != null)
+            {
+                var colWidthIndex = 0;
+                while (colWidthIndex < columnWidths.Length && retWidth == null)
+                {
+                    var columnWidth = columnWidths[colWidthIndex];
+                    if (i >= columnWidth.Min && i <= columnWidth.Max)
+                    {
+                        retWidth = columnWidth.Hidden
+                            ? 0
+                            : columnWidth.Width;
+                    }
+                    else
+                    {
+                        colWidthIndex++;
+                    }
+                }
+            }
+
+            const double DefaultColumnWidth = 8.43D;
+
+            return retWidth ?? DefaultColumnWidth;
+        }
+
         /// <inheritdoc />
         public void Reset()
         {
