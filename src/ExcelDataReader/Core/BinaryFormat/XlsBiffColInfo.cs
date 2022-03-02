@@ -4,8 +4,8 @@ namespace ExcelDataReader.Core.BinaryFormat
 {
     internal class XlsBiffColInfo : XlsBiffRecord
     {
-        public XlsBiffColInfo(byte[] bytes, uint offset)
-            : base(bytes, offset)
+        public XlsBiffColInfo(byte[] bytes)
+            : base(bytes)
         {
             var colFirst = ReadUInt16(0x0);
             var colLast = ReadUInt16(0x2);
@@ -14,23 +14,16 @@ namespace ExcelDataReader.Core.BinaryFormat
             var userSet = (flags & ColInfoSettings.UserSet) != 0;
             var hidden = (flags & ColInfoSettings.Hidden) != 0;
 
-            Value = new Col
-            {
-                CustomWidth = userSet,
-                Max = colLast,
-                Min = colFirst,
-                Width = (double)colDx / 256,
-                Hidden = hidden
-            };
+            Value = new Column(colFirst, colLast, hidden, userSet ? (double?)colDx / 256.0 : null);
         }
 
         [Flags]
         private enum ColInfoSettings
         {
-            Hidden = 0x01,
-            UserSet = 0x10
+            Hidden = 0b01,
+            UserSet = 0b10,
         }
 
-        public Col Value { get; }
+        public Column Value { get; }
     }
 }

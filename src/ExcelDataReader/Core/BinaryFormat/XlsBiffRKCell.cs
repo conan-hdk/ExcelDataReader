@@ -1,3 +1,5 @@
+using System;
+
 namespace ExcelDataReader.Core.BinaryFormat
 {
     /// <summary>
@@ -5,8 +7,8 @@ namespace ExcelDataReader.Core.BinaryFormat
     /// </summary>
     internal class XlsBiffRKCell : XlsBiffBlankCell
     {
-        internal XlsBiffRKCell(byte[] bytes, uint offset, int biffVersion)
-            : base(bytes, offset, biffVersion)
+        internal XlsBiffRKCell(byte[] bytes)
+            : base(bytes)
         {
         }
 
@@ -30,7 +32,7 @@ namespace ExcelDataReader.Core.BinaryFormat
             else
             {
                 // hi words of IEEE num
-                num = Helpers.Int64BitsToDouble((long)(rk & 0xfffffffc) << 32);
+                num = BitConverter.Int64BitsToDouble((long)(rk & 0xfffffffc) << 32);
             }
 
             if ((rk & 0x1) == 0x1)

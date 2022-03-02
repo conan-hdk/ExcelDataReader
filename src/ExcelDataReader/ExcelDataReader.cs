@@ -16,8 +16,8 @@ namespace ExcelDataReader
     {
         private IEnumerator<TWorksheet> _worksheetIterator;
         private IEnumerator<Row> _rowIterator;
-        private IEnumerator<TWorksheet> _cachedWorksheetIterator = null;
-        private List<TWorksheet> _cachedWorksheets = null;
+        private IEnumerator<TWorksheet> _cachedWorksheetIterator;
+        private List<TWorksheet> _cachedWorksheets;
 
         ~ExcelDataReader()
         {
@@ -32,6 +32,7 @@ namespace ExcelDataReader
 
         public HeaderFooter HeaderFooter => _worksheetIterator?.Current?.HeaderFooter;
 
+        // We shouldn't expose the internal array here. 
         public CellRange[] MergeCells => _worksheetIterator?.Current?.MergeCells;
 
         public int Depth { get; private set; }
@@ -103,6 +104,7 @@ namespace ExcelDataReader
         {
             if (RowCells == null)
                 throw new InvalidOperationException("No data exists for the row/column.");
+            
             return RowCells[i]?.Value;
         }
 
@@ -116,7 +118,9 @@ namespace ExcelDataReader
                 throw new InvalidOperationException("No data exists for the row/column.");
             if (RowCells[i] == null)
                 return null;
-            return _worksheetIterator?.Current?.GetNumberFormatString(RowCells[i].NumberFormatIndex)?.FormatString;
+            if (RowCells[i].EffectiveStyle == null)
+                return null;
+            return Workbook.GetNumberFormatString(RowCells[i].EffectiveStyle.NumberFormatIndex)?.FormatString;
         }
 
         public int GetNumberFormatIndex(int i)
@@ -125,7 +129,9 @@ namespace ExcelDataReader
                 throw new InvalidOperationException("No data exists for the row/column.");
             if (RowCells[i] == null)
                 return -1;
-            return RowCells[i].NumberFormatIndex;
+            if (RowCells[i].EffectiveStyle == null)
+                return -1;
+            return RowCells[i].EffectiveStyle.NumberFormatIndex;
         }
 
         public double GetColumnWidth(int i)
@@ -139,19 +145,12 @@ namespace ExcelDataReader
             double? retWidth = null;
             if (columnWidths != null)
             {
-                var colWidthIndex = 0;
-                while (colWidthIndex < columnWidths.Length && retWidth == null)
+                foreach (var columnWidth in columnWidths)
                 {
-                    var columnWidth = columnWidths[colWidthIndex];
-                    if (i >= columnWidth.Min && i <= columnWidth.Max)
+                    if (i >= columnWidth.Minimum && i <= columnWidth.Maximum)
                     {
-                        retWidth = columnWidth.Hidden
-                            ? 0
-                            : columnWidth.Width;
-                    }
-                    else
-                    {
-                        colWidthIndex++;
+                        retWidth = columnWidth.Hidden ? 0 : columnWidth.Width;
+                        break;
                     }
                 }
             }
@@ -159,6 +158,40 @@ namespace ExcelDataReader
             const double DefaultColumnWidth = 8.43D;
 
             return retWidth ?? DefaultColumnWidth;
+        }
+
+        public CellStyle GetCellStyle(int i)
+        {
+            if (RowCells == null)
+                throw new InvalidOperationException("No data exists for the row/column.");
+
+            var result = new CellStyle();
+            if (RowCells[i] == null)
+            {
+                return result;
+            }
+
+            var effectiveStyle = RowCells[i].EffectiveStyle;
+            if (effectiveStyle == null)
+            {
+                return result;
+            }
+
+            result.FontIndex = effectiveStyle.FontIndex;
+            result.NumberFormatIndex = effectiveStyle.NumberFormatIndex;
+            result.IndentLevel = effectiveStyle.IndentLevel;
+            result.HorizontalAlignment = effectiveStyle.HorizontalAlignment;
+            result.Hidden = effectiveStyle.Hidden;
+            result.Locked = effectiveStyle.Locked;
+            return result;
+        }
+
+        public CellError? GetCellError(int i)
+        {
+            if (RowCells == null)
+                throw new InvalidOperationException("No data exists for the row/column.");
+            
+            return RowCells[i]?.Error;
         }
 
         /// <inheritdoc />

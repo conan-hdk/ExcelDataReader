@@ -67,7 +67,7 @@ namespace ExcelDataReader.Core.BinaryFormat
 
         public XlsBiffSimpleValueRecord Backup { get; set; }
 
-        public List<XlsBiffRecord> Fonts { get; } = new List<XlsBiffRecord>();
+        public List<XlsBiffFont> Fonts { get; } = new List<XlsBiffFont>();
 
         public List<XlsBiffBoundSheet> Sheets { get; } = new List<XlsBiffBoundSheet>();
 
@@ -138,89 +138,109 @@ namespace ExcelDataReader.Core.BinaryFormat
             }
         }
 
+        internal void AddXf(XlsBiffXF xf)
+        {
+            var extendedFormat = new ExtendedFormat()
+            {
+                FontIndex = xf.Font,
+                NumberFormatIndex = xf.Format,
+                Locked = xf.IsLocked,
+                Hidden = xf.IsHidden,
+                HorizontalAlignment = xf.HorizontalAlignment,
+                IndentLevel = xf.IndentLevel,
+                ParentCellStyleXf = xf.ParentCellStyleXf,
+            };
+
+            // The workbook holds two kinds of XF records: Cell XFs, and Cell Style XFs.
+            // In the binary XLS format, both kinds of XF records are saved in a single list,
+            // whereas the XLSX format has two separate lists - like the CommonWorkbook internals.
+            // The Cell XFs hold indexes into the Cell Style XF list, so adding the XF in both lists 
+            // here to keep the indexes the same.
+            ExtendedFormats.Add(extendedFormat);
+            CellStyleExtendedFormats.Add(extendedFormat);
+        }
+
         private void ReadWorkbookGlobals(XlsBiffStream biffStream)
         {
+            var formats = new Dictionary<int, XlsBiffFormatString>();
+
             XlsBiffRecord rec;
-            var biffFormats = new Dictionary<ushort, XlsBiffFormatString>();
-
-            while ((rec = biffStream.Read()) != null && rec.Id != BIFFRECORDTYPE.EOF)
+            while ((rec = biffStream.Read()) != null && !(rec is XlsBiffEof))
             {
-                switch (rec.Id)
+                switch (rec)
                 {
-                    case BIFFRECORDTYPE.INTERFACEHDR:
-                        InterfaceHdr = (XlsBiffInterfaceHdr)rec;
+                    case XlsBiffInterfaceHdr hdr:
+                        InterfaceHdr = hdr;
                         break;
-                    case BIFFRECORDTYPE.BOUNDSHEET:
-                        XlsBiffBoundSheet sheet = (XlsBiffBoundSheet)rec;
-
+                    case XlsBiffBoundSheet sheet:
                         if (sheet.Type != XlsBiffBoundSheet.SheetType.Worksheet)
                             break;
-
                         Sheets.Add(sheet);
                         break;
-                    case BIFFRECORDTYPE.MMS:
-                        Mms = rec;
-                        break;
-                    case BIFFRECORDTYPE.COUNTRY:
-                        Country = rec;
-                        break;
-                    case BIFFRECORDTYPE.CODEPAGE:
+                    case XlsBiffSimpleValueRecord codePage when rec.Id == BIFFRECORDTYPE.CODEPAGE:
                         // [MS-XLS 2.4.52 CodePage] An unsigned integer that specifies the workbook’s code page.The value MUST be one
                         // of the code page values specified in [CODEPG] or the special value 1200, which means that the
                         // workbook is Unicode.
-                        CodePage = (XlsBiffSimpleValueRecord)rec;
+                        CodePage = codePage;
                         Encoding = EncodingHelper.GetEncoding(CodePage.Value);
                         break;
-                    case BIFFRECORDTYPE.FONT:
-                    case BIFFRECORDTYPE.FONT_V34:
-                        Fonts.Add(rec);
+                    case XlsBiffSimpleValueRecord is1904 when rec.Id == BIFFRECORDTYPE.RECORD1904:
+                        IsDate1904 = is1904.Value == 1;
                         break;
-                    case BIFFRECORDTYPE.FORMAT_V23:
+                    case XlsBiffFont font:
+                        Fonts.Add(font);
+                        break;
+                    case XlsBiffFormatString format23 when rec.Id == BIFFRECORDTYPE.FORMAT_V23:
+                        formats.Add((ushort)formats.Count, format23);
+                        break;
+                    case XlsBiffFormatString fmt when rec.Id == BIFFRECORDTYPE.FORMAT:
+                        var index = fmt.Index;
+                        if (!formats.ContainsKey(index))
+                            formats.Add(index, fmt);
+                        break;
+                    case XlsBiffXF xf:
+                        AddXf(xf);
+                        break;
+                    case XlsBiffSST sst:
+                        SST = sst;
+                        break;
+                    case XlsBiffContinue sstContinue:
+                        if (SST != null)
                         {
-                            var fmt = (XlsBiffFormatString)rec;
-                            biffFormats.Add((ushort)biffFormats.Count, fmt);
+                            SST.ReadContinueStrings(sstContinue);
                         }
 
                         break;
-                    case BIFFRECORDTYPE.FORMAT:
-                        {
-                            var fmt = (XlsBiffFormatString)rec;
-                            biffFormats.Add(fmt.Index, fmt);
-                        }
-
+                    case XlsBiffRecord _ when rec.Id == BIFFRECORDTYPE.MMS:
+                        Mms = rec;
                         break;
-                    case BIFFRECORDTYPE.XF:
-                    case BIFFRECORDTYPE.XF_V4:
-                    case BIFFRECORDTYPE.XF_V3:
-                    case BIFFRECORDTYPE.XF_V2:
-                        AddExtendedFormat(GetExtendedFormatCount(), ((XlsBiffXF)rec).Format, true);
+                    case XlsBiffRecord _ when rec.Id == BIFFRECORDTYPE.COUNTRY:
+                        Country = rec;
                         break;
-                    case BIFFRECORDTYPE.SST:
-                        SST = (XlsBiffSST)rec;
-                        SST.ReadStrings(biffStream);
-                        break;
-                    case BIFFRECORDTYPE.CONTINUE:
-                        break;
-                    case BIFFRECORDTYPE.EXTSST:
+                    case XlsBiffRecord _ when rec.Id == BIFFRECORDTYPE.EXTSST:
                         ExtSST = rec;
                         break;
-                    case BIFFRECORDTYPE.PASSWORD:
-                        break;
-                    case BIFFRECORDTYPE.PROTECT:
-                    case BIFFRECORDTYPE.PROT4REVPASSWORD:
+
+                    // case BIFFRECORDTYPE.PROTECT:
+                    // case BIFFRECORDTYPE.PROT4REVPASSWORD:
                         // IsProtected
-                        break;
-                    case BIFFRECORDTYPE.RECORD1904:
-                        IsDate1904 = ((XlsBiffSimpleValueRecord)rec).Value == 1;
-                        break;
+                        // break;
+                    // case BIFFRECORDTYPE.PASSWORD:
                     default:
                         break;
                 }
             }
 
-            foreach (var biffFormat in biffFormats)
+            if (SST != null)
             {
-                AddNumberFormat(biffFormat.Key, biffFormat.Value.GetValue(Encoding));
+                SST.Flush();
+            }
+
+            foreach (var format in formats)
+            {
+                // We don't decode the value until here in-case there are format records before the 
+                // codepage record. 
+                Formats.Add(format.Key, new NumberFormatString(format.Value.GetValue(Encoding)));
             }
         }
     }
