@@ -1,16 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿namespace ExcelDataReader.Core.OpenXmlFormat.Records;
 
-namespace ExcelDataReader.Core.OpenXmlFormat.Records
+internal sealed class ExtendedFormatRecord(ExtendedFormat extendedFormat) : Record
 {
-    internal sealed class ExtendedFormatRecord : Record
-    {
-        public ExtendedFormatRecord(ExtendedFormat extendedFormat) 
-        {
-            ExtendedFormat = extendedFormat;
-        }
-
-        public ExtendedFormat ExtendedFormat { get; }
-    }
+    public ExtendedFormat ExtendedFormat { get; } = extendedFormat;
 }

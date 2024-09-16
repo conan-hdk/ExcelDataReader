@@ -2,7 +2,7 @@
 
 [![NuGet](https://img.shields.io/nuget/v/ExcelDataReader.svg)](https://www.nuget.org/packages/ExcelDataReader)
 
-Lightweight and fast library written in C# for reading Microsoft Excel files (2.0-2007).
+Lightweight and fast library written in C# for reading Microsoft Excel files (2.0-2021, 365).
 
 Please feel free to fork and submit pull requests to the develop branch.
 
@@ -34,9 +34,9 @@ It is recommended to use NuGet through the VS Package Manager Console `Install-P
 
 As of ExcelDataReader version 3.0, the project was split into multiple packages:
 
-Install the `ExcelDataReader` base package to use the "low level" reader interface. Compatible with net20, net45, netstandard1.3 and netstandard2.0.
+Install the `ExcelDataReader` base package to use the "low level" reader interface. Compatible with net462, netstandard2.0 and netstandard2.1.
 
-Install the `ExcelDataReader.DataSet` extension package to use the `AsDataSet()` method to populate a `System.Data.DataSet`. This will also pull in the base package. Compatible with net20, net45 and netstandard2.0.
+Install the `ExcelDataReader.DataSet` extension package to use the `AsDataSet()` method to populate a `System.Data.DataSet`. This will also pull in the base package. Compatible with net462, netstandard2.0 and netstandard2.1.
 
 ## How to use
 
@@ -81,25 +81,28 @@ The reader returns all CSV field values as strings and makes no attempts to conv
 
 The `AsDataSet()` extension method is a convenient helper for quickly getting the data, but is not always available or desirable to use. IExcelDataReader extends the `System.Data.IDataReader` and `IDataRecord` interfaces to navigate and retrieve data at a lower level. The most important reader methods and properties:
 
-- `Read()` reads a row from the current sheet.
-- `NextResult()` advances the cursor to the next sheet.
-- `ResultsCount` returns the number of sheets in the current workbook.
-- `Name` returns the name of the current sheet.
-- `CodeName` returns the VBA code name identifier of the current sheet.
-- `FieldCount` returns the number of columns in the current sheet.
-- `RowCount` returns the number of rows in the current sheet. This includes terminal empty rows which are otherwise excluded by AsDataSet(). Throws `InvalidOperationException` on CSV files when used with `AnalyzeInitialCsvRows`.
-- `HeaderFooter` returns an object with information about the headers and footers, or `null` if there are none.
-- `MergeCells` returns an array of merged cell ranges in the current sheet.
-- `RowHeight` returns the visual height of the current row in points. May be 0 if the row is hidden.
-- `GetColumnWidth()` returns the width of a column in character units. May be 0 if the column is hidden.
-- `GetFieldType()` returns the type of a value in the current row. Always one of the types supported by Excel: `double`, `int`, `bool`, `DateTime`, `TimeSpan`, `string`, or `null` if there is no value.
-- `IsDBNull()` checks if a value in the current row is null. 
-- `GetValue()` returns a value from the current row as an `object`, or `null` if there is no value.
-- `GetDouble()`, `GetInt32()`, `GetBoolean()`, `GetDateTime()`, `GetString()` return a value from the current row cast to their respective type.
-- `GetNumberFormatString()` returns a string containing the formatting codes for a value in the current row, or `null` if there is no value. See also the Formatting section below.
-- `GetNumberFormatIndex()` returns the number format index for a value in the current row. Index values below 164 refer to built-in number formats, otherwise indicate a custom number format.
-- `GetCellStyle()` returns an object containing style information for a cell in the current row: indent, horizontal alignment, hidden, locked.
-- The typed `Get*()` methods throw `InvalidCastException` unless the types match exactly.
+
+| Method                                                                                  | Property                                                                                                                                                                                                                |
+|-----------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Read()`                                                                                | reads a row from the current sheet.                                                                                                                                                                                     |
+| `NextResult()`                                                                          | advances the cursor to the next sheet.                                                                                                                                                                                  |
+| `ResultsCount`                                                                          | returns the number of sheets in the current workbook.                                                                                                                                                                   |
+| `Name`                                                                                  | returns the name of the current sheet.                                                                                                                                                                                  |
+| `CodeName`                                                                              | returns the VBA code name identifier of the current sheet.                                                                                                                                                              |
+| `FieldCount`                                                                            | returns the number of columns in the current sheet.                                                                                                                                                                     |
+| `RowCount`                                                                              | returns the number of rows in the current sheet. This includes terminal empty rows which are otherwise excluded by AsDataSet(). Throws `InvalidOperationException` on CSV files when used with `AnalyzeInitialCsvRows`. |
+| `HeaderFooter`                                                                          | returns an object with information about the headers and footers, or `null` if there are none.                                                                                                                          |
+| `MergeCells`                                                                            | returns an array of merged cell ranges in the current sheet.                                                                                                                                                            |
+| `RowHeight`                                                                             | returns the visual height of the current row in points. May be 0 if the row is hidden.                                                                                                                                  |
+| `GetColumnWidth()`                                                                      | returns the width of a column in character units. May be 0 if the column is hidden.                                                                                                                                     |
+| `GetFieldType()`                                                                        | returns the type of a value in the current row. Always one of the types supported by Excel: `double`, `int`, `bool`, `DateTime`, `TimeSpan`, `string`, or `null` if there is no value.                                  |
+| `IsDBNull()`                                                                            | checks if a value in the current row is null.                                                                                                                                                                           |
+| `GetValue()`                                                                            | returns a value from the current row as an `object`, or `null` if there is no value.                                                                                                                                    |
+| `GetDouble()`<br/>`GetInt32()`<br/>`GetBoolean()`<br/>`GetDateTime()`<br/>`GetString()` | return a value from the current row cast to their respective type.                                                                                                                                                      |
+| `GetNumberFormatString()`                                                               | returns a string containing the formatting codes for a value in the current row, or `null` if there is no value. See also the Formatting section below.                                                                 |
+| `GetNumberFormatIndex()`                                                                | returns the number format index for a value in the current row. Index values below 164 refer to built-in number formats, otherwise indicate a custom number format.                                                     |
+| `GetCellStyle()`                                                                        | returns an object containing style information for a cell in the current row: indent, horizontal alignment, hidden, locked.                                                                                             |
+| The typed `Get*()` methods                                                              | throw `InvalidCastException` unless the types match exactly.                                                                                                                                                            |
 
 ### CreateReader() configuration options
 
@@ -250,7 +253,7 @@ var result = reader.AsDataSet(new ExcelDataSetConfiguration()
 
 ## Important note on .NET Core
 
-By default, ExcelDataReader throws a NotSupportedException "No data is available for encoding 1252." on .NET Core.
+By default, ExcelDataReader throws a NotSupportedException "No data is available for encoding 1252." on .NET Core and .NET 5.0 or later.
 
 To fix, add a dependency to the package `System.Text.Encoding.CodePages` and then add code to register the code page provider during application initialization (f.ex in Startup.cs):
 
@@ -258,4 +261,4 @@ To fix, add a dependency to the package `System.Text.Encoding.CodePages` and the
 System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 ```
 
-This is required to parse strings in binary BIFF2-5 Excel documents encoded with DOS-era code pages. These encodings are registered by default in the full .NET Framework, but not on .NET Core.
+This is required to parse strings in binary BIFF2-5 Excel documents encoded with DOS-era code pages. These encodings are registered by default in the full .NET Framework, but not on .NET Core and .NET 5.0 or later.

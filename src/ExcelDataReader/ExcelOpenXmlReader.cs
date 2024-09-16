@@ -1,28 +1,26 @@
-using System.IO;
 using ExcelDataReader.Core.OpenXmlFormat;
 
-namespace ExcelDataReader
+namespace ExcelDataReader;
+
+internal sealed class ExcelOpenXmlReader : ExcelDataReader<XlsxWorkbook, XlsxWorksheet>
 {
-    internal class ExcelOpenXmlReader : ExcelDataReader<XlsxWorkbook, XlsxWorksheet>
+    public ExcelOpenXmlReader(Stream stream)
     {
-        public ExcelOpenXmlReader(Stream stream)
-        {
-            Document = new ZipWorker(stream);
-            Workbook = new XlsxWorkbook(Document);
+        Document = new(stream);
+        Workbook = new XlsxWorkbook(Document);
 
-            // By default, the data reader is positioned on the first result.
-            Reset();
-        }
+        // By default, the data reader is positioned on the first result.
+        Reset();
+    }
 
-        private ZipWorker Document { get; set; }
+    private ZipWorker Document { get; set; }
 
-        public override void Close()
-        {
-            base.Close();
+    public override void Close()
+    {
+        base.Close();
 
-            Document?.Dispose();
-            Workbook = null;
-            Document = null;
-        }
+        Document?.Dispose();
+        Workbook = null;
+        Document = null;
     }
 }

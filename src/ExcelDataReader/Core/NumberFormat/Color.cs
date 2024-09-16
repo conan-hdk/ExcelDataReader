@@ -1,7 +1,3 @@
-﻿namespace ExcelDataReader.Core.NumberFormat
-{
-    internal class Color
-    {
-        public string Value { get; set; }
-    }
-}
+﻿namespace ExcelDataReader.Core.NumberFormat;
+
+internal sealed record Color(string Value);

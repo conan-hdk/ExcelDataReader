@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿namespace ExcelDataReader.Core.OpenXmlFormat.Records;
 
-namespace ExcelDataReader.Core.OpenXmlFormat.Records
+internal sealed class SheetDataBeginRecord : Record 
 {
-    internal sealed class SheetDataBeginRecord : Record 
-    {
-    }
 }
