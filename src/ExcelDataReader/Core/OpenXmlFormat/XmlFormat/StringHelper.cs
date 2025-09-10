@@ -1,4 +1,6 @@
-﻿using System.Text;
+﻿#nullable enable
+
+using System.Text;
 using System.Xml;
 
 namespace ExcelDataReader.Core.OpenXmlFormat.XmlFormat;
@@ -8,13 +10,16 @@ internal static class StringHelper
     private const string ElementT = "t";
     private const string ElementR = "r";
 
+    // https://www.w3.org/TR/REC-xml#NT-S
+    private static readonly char[] WhitespaceChars = [' ', '\t', '\n', '\r'];
+
     public static string ReadStringItem(XmlReader reader, string nsSpreadsheetMl)
     {
         if (!XmlReaderHelper.ReadFirstContent(reader))
         {
             return string.Empty;
         }
-
+        
         StringBuilder sb = new();
         while (!reader.EOF)
         {
@@ -61,6 +66,6 @@ internal static class StringHelper
         if (reader.GetAttribute("xml:space") == "preserve")
             return reader.ReadElementContentAsString();
         else
-            return reader.ReadElementContentAsString().Trim();
+            return reader.ReadElementContentAsString().Trim(WhitespaceChars);
     }
 }

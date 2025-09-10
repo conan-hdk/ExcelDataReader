@@ -11,11 +11,18 @@
     <Optimize>true</Optimize>
     <Configuration>Release</Configuration>
     <IsPackable>false</IsPackable>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\ExcelDataReader\ExcelDataReader.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\TestData\Test10x10000.xlsx"/>
+    <EmbeddedResource Include="..\TestData\Test10x10000.xlsb"/>
+    <EmbeddedResource Include="..\TestData\Test10x10000.xls"/>
+    <EmbeddedResource Include="..\TestData\Test_git_issue289.xlsx"/>
   </ItemGroup>
 </Project>

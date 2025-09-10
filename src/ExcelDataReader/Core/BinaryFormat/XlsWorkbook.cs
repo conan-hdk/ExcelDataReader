@@ -137,7 +137,7 @@ internal sealed class XlsWorkbook : CommonWorkbook, IWorkbook<XlsWorksheet>
 
     internal void AddXf(XlsBiffXF xf)
     {
-        var extendedFormat = new ExtendedFormat(xf.ParentCellStyleXf, xf.Font, xf.Format, xf.IsLocked, xf.IsHidden, xf.IndentLevel, xf.HorizontalAlignment);
+        var extendedFormat = new ExtendedFormat(xf.ParentCellStyleXf, xf.Font, xf.Format, xf.IsLocked, xf.IsHidden, xf.IndentLevel, xf.HorizontalAlignment, xf.VerticalAlignment);
 
         // The workbook holds two kinds of XF records: Cell XFs, and Cell Style XFs.
         // In the binary XLS format, both kinds of XF records are saved in a single list,
@@ -152,8 +152,7 @@ internal sealed class XlsWorkbook : CommonWorkbook, IWorkbook<XlsWorksheet>
     {
         Dictionary<int, XlsBiffFormatString> formats = [];
 
-        XlsBiffRecord rec;
-        while ((rec = biffStream.Read()) != null && rec is not XlsBiffEof)
+        while (biffStream.Read() is { } rec && rec is not XlsBiffEof)
         {
             switch (rec)
             {
@@ -183,8 +182,12 @@ internal sealed class XlsWorkbook : CommonWorkbook, IWorkbook<XlsWorksheet>
                     break;
                 case XlsBiffFormatString fmt when rec.Id == BIFFRECORDTYPE.FORMAT:
                     var index = fmt.Index;
+#if NETSTANDARD2_1_OR_GREATER || NET8_0_OR_GREATER
+                    formats.TryAdd(index, fmt);
+#else
                     if (!formats.ContainsKey(index))
                         formats.Add(index, fmt);
+#endif
                     break;
                 case XlsBiffXF xf:
                     AddXf(xf);
@@ -195,17 +198,17 @@ internal sealed class XlsWorkbook : CommonWorkbook, IWorkbook<XlsWorksheet>
                 case XlsBiffContinue sstContinue:
                     SST?.ReadContinueStrings(sstContinue);
                     break;
-                case XlsBiffRecord _ when rec.Id == BIFFRECORDTYPE.MMS:
+                case { Id: BIFFRECORDTYPE.MMS } _:
                     Mms = rec;
                     break;
-                case XlsBiffRecord _ when rec.Id == BIFFRECORDTYPE.COUNTRY:
+                case { Id: BIFFRECORDTYPE.COUNTRY }:
                     Country = rec;
                     break;
-                case XlsBiffRecord _ when rec.Id == BIFFRECORDTYPE.EXTSST:
+                case { Id: BIFFRECORDTYPE.EXTSST }:
                     ExtSST = rec;
                     break;
 
-                case XlsBiffRecord _ when rec.Id == BIFFRECORDTYPE.WINDOW1:
+                case { Id: BIFFRECORDTYPE.WINDOW1 }:
                     ActiveSheet = rec.ReadInt16(10);
                     break;
 

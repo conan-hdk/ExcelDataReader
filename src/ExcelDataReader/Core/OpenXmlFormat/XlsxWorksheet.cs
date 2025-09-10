@@ -12,8 +12,6 @@ internal sealed class XlsxWorksheet : IWorksheet
         Workbook = workbook;
 
         Name = refSheet.Name;
-        Id = refSheet.Id;
-        Rid = refSheet.Rid;
         VisibleState = refSheet.VisibleState;
         Path = refSheet.Path;
         DefaultRowHeight = 15;
@@ -21,7 +19,7 @@ internal sealed class XlsxWorksheet : IWorksheet
         if (string.IsNullOrEmpty(Path))
             return;
 
-        using var sheetStream = Document.GetWorksheetReader(Path);
+        using var sheetStream = Document.GetWorksheetReader(Path, true);
         
         if (sheetStream == null)
             return;
@@ -34,8 +32,7 @@ internal sealed class XlsxWorksheet : IWorksheet
 
         bool inSheetData = false;
 
-        Record record;
-        while ((record = sheetStream.Read()) != null)
+        while (sheetStream.Read() is { } record)
         {
             switch (record)
             {
@@ -71,7 +68,7 @@ internal sealed class XlsxWorksheet : IWorksheet
             }
         }
 
-        ColumnWidths = [.. columnWidths];
+        ColumnWidths = columnWidths;
         MergeCells = [.. cellRanges];
 
         if (rowIndexMaximum != int.MinValue && columnIndexMaximum != int.MinValue)
@@ -91,21 +88,15 @@ internal sealed class XlsxWorksheet : IWorksheet
 
     public string VisibleState { get; }
 
-    public bool IsActiveSheet { get; }
-
     public HeaderFooter HeaderFooter { get; }
-
-    public double DefaultRowHeight { get; }
-
-    public uint Id { get; }
-
-    public string Rid { get; set; }
-
-    public string Path { get; set; }
 
     public CellRange[] MergeCells { get; }
 
-    public Column[] ColumnWidths { get; }
+    public List<Column> ColumnWidths { get; }
+
+    private string Path { get; set; }
+
+    private double DefaultRowHeight { get; }
 
     private ZipWorker Document { get; }
 
@@ -116,17 +107,17 @@ internal sealed class XlsxWorksheet : IWorksheet
         if (string.IsNullOrEmpty(Path))
             yield break;
 
-        using RecordReader sheetStream = Document.GetWorksheetReader(Path);
+        using RecordReader sheetStream = Document.GetWorksheetReader(Path, false);
         if (sheetStream == null)
             yield break;
 
         var rowIndex = 0;
-        List<Cell> cells = null;
+        List<Cell> cells = [];
+        bool foundRowOrCell = false;
         double height = 0;
 
         bool inSheetData = false;
-        Record record;
-        while ((record = sheetStream.Read()) != null)
+        while (sheetStream.Read() is { } record)
         {
             switch (record)
             {
@@ -137,36 +128,55 @@ internal sealed class XlsxWorksheet : IWorksheet
                     inSheetData = false;
                     break;
                 case RowHeaderRecord row when inSheetData:
-                    int currentRowIndex = row.RowIndex;
+                    foundRowOrCell = true;
 
-                    if (cells != null && rowIndex != currentRowIndex)
+                    int currentRowIndex = row.RowIndex;
+                    if (rowIndex != currentRowIndex)
                     {
                         yield return new Row(rowIndex++, height, cells);
-                        cells = null;
-                    }
-
-                    if (cells == null)
-                    {
-                        height = row.Hidden ? 0 : row.Height ?? DefaultRowHeight;
-                        cells = [];
+                        cells.Clear();
                     }
 
                     for (; rowIndex < currentRowIndex; rowIndex++)
                     {
-                        yield return new Row(rowIndex, DefaultRowHeight, []);
+                        yield return new Row(rowIndex, DefaultRowHeight, cells);
                     }
+
+                    height = row.Hidden ? 0 : row.Height ?? DefaultRowHeight;
 
                     break;
                 case CellRecord cell when inSheetData:
                     // TODO What if we get a cell without a row?
                     var extendedFormat = Workbook.GetEffectiveCellStyle(cell.XfIndex, 0);
                     cells.Add(new Cell(cell.ColumnIndex, ConvertCellValue(cell.Value, extendedFormat.NumberFormatIndex), extendedFormat, cell.Error));
+                    foundRowOrCell = true;
                     break;
             }
         }
 
-        if (cells != null)
+        if (foundRowOrCell)
             yield return new Row(rowIndex, height, cells);
+    }
+
+    private static bool TryParseToTimeSpan(string s, out TimeSpan result)
+    {
+        var isIsoFormat = Helpers.StringStartsWith(s, 'P');
+
+        if (!isIsoFormat)
+        {
+            return TimeSpan.TryParse(s, out result);
+        }
+
+        try
+        {
+            result = XmlConvert.ToTimeSpan(s);
+            return true;
+        }
+        catch (FormatException)
+        {
+            result = TimeSpan.Zero;
+            return false;
+        }
     }
 
     private object ConvertCellValue(object value, int numberFormatIndex)
@@ -196,19 +206,22 @@ internal sealed class XlsxWorksheet : IWorksheet
             case DateTime date:
                 return date;
 
-            default:
-                if (value == null)
-                    return value;
+            case string s:
                 NumberFormatString numberFormat = Workbook.GetNumberFormatString(numberFormatIndex);
-                if (numberFormat.IsTimeSpanFormat)
-                    return XmlConvert.ToTimeSpan(value.ToString());
-                if (numberFormat.IsDateTimeFormat)
+                if (numberFormat.IsTimeSpanFormat && TryParseToTimeSpan(s, out var timeSpan))
                 {
-                    if (DateTimeOffset.TryParse(value.ToString(), out DateTimeOffset dateTimeOffset))
-                        return dateTimeOffset;
+                    return timeSpan;
                 }
 
+                if (numberFormat.IsDateTimeFormat && DateTimeOffset.TryParse(s, out DateTimeOffset dateTimeOffset))
+                {
+                    return dateTimeOffset;
+                }
+
+                return s;
+
+            default:
                 return value;
         }
-    }        
+    }
 }

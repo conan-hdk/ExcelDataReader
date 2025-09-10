@@ -1,4 +1,6 @@
-﻿namespace ExcelDataReader.Core;
+﻿#nullable enable
+
+namespace ExcelDataReader.Core;
 
 internal static class ReferenceHelper
 {
@@ -8,7 +10,7 @@ internal static class ReferenceHelper
     /// <param name="value">The value.</param>
     /// <param name="column">The column, 1-based.</param>
     /// <param name="row">The row, 1-based.</param>
-#if NET8_0_OR_GREATER
+#if NETSTANDARD2_1_OR_GREATER || NET8_0_OR_GREATER
     public static bool ParseReference(ReadOnlySpan<char> value, out int column, out int row)
     {
         column = 0;
@@ -18,7 +20,7 @@ internal static class ReferenceHelper
         while (position < value.Length)
         {
             var c = char.ToUpperInvariant(value[position]);
-            if (c >= 'A' && c <= 'Z')
+            if (c is >= 'A' and <= 'Z')
             {
                 position++;
                 column *= 26;
@@ -40,7 +42,7 @@ internal static class ReferenceHelper
             return false;
         }
 
-        if (!TryParseDecInt(value.Slice(position), out row))
+        if (!TryParseDecInt(value[position..], out row))
         {
             return false;
         }
@@ -108,7 +110,7 @@ internal static class ReferenceHelper
             return false;
         }
 
-        if (!TryParseDecInt(value, position, out row))
+        if (!TryParseDecInt(value!, position, out row))
         {
             return false;
         }

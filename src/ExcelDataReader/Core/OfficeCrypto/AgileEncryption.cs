@@ -16,6 +16,9 @@ internal sealed class AgileEncryption : EncryptionInfo
     private const string NsEncryption = "http://schemas.microsoft.com/office/2006/encryption";
     private const string NsPassword = "http://schemas.microsoft.com/office/2006/keyEncryptor/password";
 
+    private static readonly byte[] _inputSuffix = [0xfe, 0xa7, 0xd2, 0x76, 0x3b, 0x4b, 0x9e, 0x79];
+    private static readonly byte[] _valueSuffix = [0xd7, 0xaa, 0x0f, 0x6d, 0x30, 0x61, 0x34, 0x4e];
+    
     public AgileEncryption(byte[] bytes)
     {
         using var stream = new MemoryStream(bytes, 8, bytes.Length - 8);
@@ -91,12 +94,11 @@ internal sealed class AgileEncryption : EncryptionInfo
             secretKey = HashPassword(password, PasswordSaltValue, hashAlgorithm, PasswordSpinCount);
 
         var inputBlockKey = CryptoHelpers.HashBytes(
-            CryptoHelpers.Combine(secretKey, new byte[] { 0xfe, 0xa7, 0xd2, 0x76, 0x3b, 0x4b, 0x9e, 0x79 }),
-            PasswordHashAlgorithm);
+            CryptoHelpers.Combine(secretKey, _inputSuffix), PasswordHashAlgorithm);
         Array.Resize(ref inputBlockKey, PasswordKeyBits / 8);
 
         var valueBlockKey = CryptoHelpers.HashBytes(
-            CryptoHelpers.Combine(secretKey, new byte[] { 0xd7, 0xaa, 0x0f, 0x6d, 0x30, 0x61, 0x34, 0x4e }),
+            CryptoHelpers.Combine(secretKey, _valueSuffix),
             PasswordHashAlgorithm);
         Array.Resize(ref valueBlockKey, PasswordKeyBits / 8);
 
@@ -141,53 +143,70 @@ internal sealed class AgileEncryption : EncryptionInfo
         return decryptedKeyValue;
     }
 
+#if NETSTANDARD2_1_OR_GREATER || NET8_0_OR_GREATER
     private static byte[] HashPassword(string password, byte[] saltValue, HashAlgorithm hashAlgorithm, int spinCount)
     {
-        var h = hashAlgorithm.ComputeHash(CryptoHelpers.Combine(saltValue, System.Text.Encoding.Unicode.GetBytes(password)));
+        var saltAndPassword = CryptoHelpers.Combine(saltValue, System.Text.Encoding.Unicode.GetBytes(password));
+        var hash = hashAlgorithm.ComputeHash(saltAndPassword);
+
+        var rented = System.Buffers.ArrayPool<byte>.Shared.Rent(4 + hash.Length);
+        var iterationData = rented.AsSpan(0, 4 + hash.Length);
 
         for (var i = 0; i < spinCount; i++)
         {
-            h = hashAlgorithm.ComputeHash(CryptoHelpers.Combine(BitConverter.GetBytes(i), h));
+            BitConverter.TryWriteBytes(iterationData[..4], i);
+            hash.CopyTo(iterationData[4..]);
+            hashAlgorithm.TryComputeHash(iterationData, hash, out _);
         }
 
-        return h;
+        System.Buffers.ArrayPool<byte>.Shared.Return(rented);
+
+        return hash;
     }
+#else
+    private static byte[] HashPassword(string password, byte[] saltValue, HashAlgorithm hashAlgorithm, int spinCount)
+    {
+        var saltAndPassword = CryptoHelpers.Combine(saltValue, System.Text.Encoding.Unicode.GetBytes(password));
+        var hash = hashAlgorithm.ComputeHash(saltAndPassword);
+
+        var iterationData = new byte[4 + hash.Length];
+
+        for (var i = 0; i < spinCount; i++)
+        {
+            var buffer = BitConverter.GetBytes(i);
+            Buffer.BlockCopy(buffer, 0, iterationData, 0, 4);
+            Buffer.BlockCopy(hash, 0, iterationData, 4, hash.Length);
+            hash = hashAlgorithm.ComputeHash(iterationData, 0, iterationData.Length);
+        }
+
+        return hash;
+    }
+#endif
 
     private static HashIdentifier ParseHash(string value)
     {
+#if NETSTANDARD2_1_OR_GREATER || NET8_0_OR_GREATER
+        return Enum.Parse<HashIdentifier>(value);
+#else
         return (HashIdentifier)Enum.Parse(typeof(HashIdentifier), value);
+#endif
     }
 
-    private static CipherIdentifier ParseCipher(string value/*, int blockBits*/)
+    private static CipherIdentifier ParseCipher(string value/*, int blockBits*/) => value switch
     {
-        if (value == "AES")
-        {
-            return CipherIdentifier.AES;
-        }
-        else if (value == "DES")
-        {
-            return CipherIdentifier.DES;
-        }
-        else if (value == "3DES")
-        {
-            return CipherIdentifier.DES3;
-        }
-        else if (value == "RC2")
-        {
-            return CipherIdentifier.RC2;
-        }
+        "AES" => CipherIdentifier.AES,
+        "DES" => CipherIdentifier.DES,
+        "3DES" => CipherIdentifier.DES3,
+        "RC2" => CipherIdentifier.RC2,
+        _ => throw new ArgumentException("Unknown encryption: " + value, nameof(value)),
+    };
 
-        throw new ArgumentException("Unknown encryption: " + value, nameof(value));
-    }
-
-    private static CipherMode ParseCipherMode(string value)
+    private static CipherMode ParseCipherMode(string value) => value switch
     {
-        if (value == "ChainingModeCBC")
-            return CipherMode.CBC;
-        else if (value == "ChainingModeCFB")
-            return CipherMode.CFB;
-        throw new ArgumentException("Invalid CipherMode " + value);
-    }
+        "ChainingModeCBC" => CipherMode.CBC,
+        "ChainingModeCFB" => CipherMode.CFB,
+        _ => throw new ArgumentException("Invalid CipherMode " + value),
+    };
 
     private void ReadXmlEncryptionInfoStream(XmlReader xmlReader)
     {

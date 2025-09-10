@@ -404,7 +404,7 @@ public abstract class ExcelTestBase
     }
     
     [Test]
-    public void GitIssue283TimeSpan()
+    public void GitIssue283IsoFormatTimeSpan()
     {
         using var reader = OpenReader("Test_git_issue_283_TimeSpan");
         reader.Read();
@@ -965,6 +965,42 @@ public abstract class ExcelTestBase
         {
             Assert.That(reader.FieldCount, Is.EqualTo(3));
         }
+    }
+
+    [Test]
+    public void GitIssue694ExcelTimeFormatTimeSpan()
+    {
+        using var reader = OpenReader("Test_git_issue_694_TimeSpan");
+        reader.Read();
+        reader.Read();
+        Assert.That(TimeSpan.Parse(reader[1].ToString()), Is.EqualTo(TimeSpan.Parse("-13:57")));
+        reader.Read();
+        Assert.That(TimeSpan.Parse(reader[1].ToString()), Is.EqualTo(TimeSpan.Parse("-00:11")));
+        reader.Read();
+        Assert.That(TimeSpan.Parse(reader[1].ToString()), Is.EqualTo(TimeSpan.Parse("00:11")));
+    }
+
+    [Test]
+    public void GitIssue694ExcelTimeFormatTimeSpanFormulaInvalidResult()
+    {
+        using var reader = OpenReader("Test_git_issue_694_TimeSpan_Formula");
+        reader.Read();
+        Assert.Multiple(() =>
+        {
+            Assert.That(reader[0].ToString(), Is.EqualTo("A"));
+            Assert.That(reader[1].ToString(), Is.EqualTo("P"));
+        });
+    }
+
+    [Test]
+    public void GitIssue574VerticalAlignment()
+    {        
+        using var reader = OpenReader("Test_git_issue_574");
+        reader.Read();
+
+        Assert.That(reader.GetCellStyle(0).VerticalAlignment, Is.EqualTo(VerticalAlignment.Top));
+        Assert.That(reader.GetCellStyle(1).VerticalAlignment, Is.EqualTo(VerticalAlignment.Center));
+        Assert.That(reader.GetCellStyle(2).VerticalAlignment, Is.EqualTo(VerticalAlignment.Bottom));
     }
 
     protected IExcelDataReader OpenReader(string name)

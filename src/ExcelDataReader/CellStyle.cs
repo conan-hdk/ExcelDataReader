@@ -16,9 +16,9 @@ public enum HorizontalAlignment
     Left,
 
     /// <summary>
-    /// Centered.
+    /// Center.
     /// </summary>
-    Centered,
+    Center = 2,
 
     /// <summary>
     /// Right.
@@ -39,6 +39,46 @@ public enum HorizontalAlignment
     /// Centered across selection.
     /// </summary>
     CenteredAcrossSelection,
+
+    /// <summary>
+    /// Distributed.
+    /// </summary>
+    Distributed,
+
+    /// <summary>
+    /// Same as <see cref="Center"/>.
+    /// </summary>
+    /// <remarks>
+    /// This is an alias for <see cref="Center"/> to maintain compatibility with older versions of the library.
+    /// It is recommended to use <see cref="Center"/> for clarity in new code.
+    /// </remarks>
+    Centered = Center,
+}
+
+/// <summary>
+/// Vertical alignment.
+/// </summary>
+public enum VerticalAlignment
+{
+    /// <summary>
+    /// Top.
+    /// </summary>
+    Top,
+
+    /// <summary>
+    /// Center.
+    /// </summary>
+    Center,
+
+    /// <summary>
+    /// Bottom.
+    /// </summary>
+    Bottom,
+
+    /// <summary>
+    /// Justify.
+    /// </summary>
+    Justify,
 
     /// <summary>
     /// Distributed.
@@ -70,6 +110,11 @@ public class CellStyle
     /// Gets the horizontal alignment.
     /// </summary>
     public HorizontalAlignment HorizontalAlignment { get; internal set; }
+
+    /// <summary>
+    /// Gets the vertical alignment.
+    /// </summary>
+    public VerticalAlignment VerticalAlignment { get; internal set; }
 
     /// <summary>
     /// Gets a value indicating whether the cell is hidden.

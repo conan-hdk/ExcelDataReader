@@ -7,10 +7,10 @@ namespace ExcelDataReader.Core.CsvFormat;
 /// </summary>
 internal sealed class CsvParser
 {
-    public CsvParser(char separator, Encoding encoding)
+    public CsvParser(char separator, Encoding encoding, char? quoteChar = null, bool trimWhiteSpace = true)
     {
         Separator = separator;
-        QuoteChar = '"';
+        QuoteChar = quoteChar;
 
         Decoder = encoding.GetDecoder();
         Decoder.Fallback = new DecoderExceptionFallback();
@@ -19,6 +19,8 @@ internal sealed class CsvParser
         CharBuffer = new char[bufferSize];
 
         State = CsvState.PreValue;
+
+        TrimWhiteSpace = trimWhiteSpace;
     }
 
     private enum CsvState
@@ -34,7 +36,7 @@ internal sealed class CsvParser
 
     private CsvState State { get; set; }
 
-    private char QuoteChar { get; }
+    private char? QuoteChar { get; }
 
     private int TrailingWhitespaceCount { get; set; }
 
@@ -46,11 +48,13 @@ internal sealed class CsvParser
 
     private char[] CharBuffer { get; set; }
 
-    private StringBuilder ValueResult { get; set; } = new StringBuilder();
+    private StringBuilder ValueResult { get; set; } = new();
 
     private List<string> RowResult { get; set; } = [];
 
     private List<List<string>> RowsResult { get; set; } = [];
+
+    private bool TrimWhiteSpace { get; }
 
     public void ParseBuffer(byte[] bytes, int offset, int count, out List<List<string>> rows)
     {
@@ -88,39 +92,26 @@ internal sealed class CsvParser
         var parsed = false;
         while (!parsed)
         {
-            switch (State)
+            parsed = State switch
             {
-                case CsvState.PreValue:
-                    parsed = ReadPreValue(c, bytesUsed);
-                    break;
-                case CsvState.Value:
-                    parsed = ReadValue(c, bytesUsed);
-                    break;
-                case CsvState.QuotedValue:
-                    parsed = ReadQuotedValue(c, bytesUsed);
-                    break;
-                case CsvState.QuotedValueQuote:
-                    parsed = ReadQuotedValueQuote(c, bytesUsed);
-                    break;
-                case CsvState.Separator:
-                    parsed = ReadSeparator(c, bytesUsed);
-                    break;
-                case CsvState.Linebreak:
-                    parsed = ReadLinebreak(c, bytesUsed);
-                    break;
-                default:
-                    throw new InvalidOperationException("Unhandled parser state: " + State);
-            }
+                CsvState.PreValue => ReadPreValue(c, bytesUsed),
+                CsvState.Value => ReadValue(c, bytesUsed),
+                CsvState.QuotedValue => ReadQuotedValue(c),
+                CsvState.QuotedValueQuote => ReadQuotedValueQuote(c),
+                CsvState.Separator => ReadSeparator(),
+                CsvState.Linebreak => ReadLinebreak(c),
+                _ => throw new InvalidOperationException("Unhandled parser state: " + State)
+            };
         }
     }
 
     private bool ReadPreValue(char c, int bytesUsed)
     {
-        if (IsWhitespace(c))
+        if (IsWhitespace(c) && TrimWhiteSpace)
         {
             return true;
         }
-        else if (c == QuoteChar)
+        else if (QuoteChar.HasValue && c == QuoteChar.Value)
         {
             State = CsvState.QuotedValue;
             return true;
@@ -166,7 +157,7 @@ internal sealed class CsvParser
         }
         else
         {
-            if (IsWhitespace(c))
+            if (IsWhitespace(c) && TrimWhiteSpace)
             {
                 TrailingWhitespaceCount++;
             }
@@ -180,21 +171,21 @@ internal sealed class CsvParser
         }
     }
 
-    private bool ReadQuotedValue(char c, int bytesUsed)
+    private bool ReadQuotedValue(char c)
     {
         if (c == QuoteChar)
         {
             State = CsvState.QuotedValueQuote;
-            return true;
         }
         else
         {
             ValueResult.Append(c);
-            return true;
         }
+
+        return true;
     }
 
-    private bool ReadQuotedValueQuote(char c, int bytesUsed)
+    private bool ReadQuotedValueQuote(char c)
     {
         if (c == QuoteChar)
         {
@@ -211,14 +202,14 @@ internal sealed class CsvParser
         }
     }
 
-    private bool ReadSeparator(char c, int bytesUsed)
+    private bool ReadSeparator()
     {
         AddValueToRow();
         State = CsvState.PreValue;
         return true;
     }
 
-    private bool ReadLinebreak(char c, int bytesUsed)
+    private bool ReadLinebreak(char c)
     {
         if (HasCarriageReturn)
         {
@@ -244,7 +235,7 @@ internal sealed class CsvParser
 
     private void AddValueToRow()
     {
-        RowResult.Add(ValueResult.ToString(0, ValueResult.Length - TrailingWhitespaceCount)); 
+        RowResult.Add(ValueResult.ToString(0, ValueResult.Length - TrailingWhitespaceCount));
         ValueResult = new StringBuilder();
         TrailingWhitespaceCount = 0;
     }
